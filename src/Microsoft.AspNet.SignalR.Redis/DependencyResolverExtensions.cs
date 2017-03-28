@@ -39,5 +39,25 @@ namespace Microsoft.AspNet.SignalR
 
             return resolver;
         }
+
+        //Feature - Pass ConnectionMultiplexer instance
+        // With reference to issue #3383 (https://github.com/SignalR/SignalR/issues/3383).
+        /// <summary>
+        ///     Setup Redis backplane from an existing ConnectionMultiplexer instance
+        /// </summary>
+        /// <param name="resolver"></param>
+        /// <param name="configuration"></param>
+        /// <param name="connection"></param>
+        /// <returns>IDependencyResolver</returns>
+        public static IDependencyResolver UseRedis(this IDependencyResolver resolver, RedisScaleoutConfiguration configuration,
+            ConnectionMultiplexer connection)
+        {
+            var bus = new Lazy<RedisMessageBus>(() => new RedisMessageBus(resolver, new RedisConnection(connection), configuration));
+
+            resolver.Register(typeof(IMessageBus), () => bus.Value);
+
+            return resolver;
+        }
+        //Feature - Pass ConnectionMultiplexer instance
     }
 }

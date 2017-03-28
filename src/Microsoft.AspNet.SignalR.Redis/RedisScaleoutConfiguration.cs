@@ -18,6 +18,13 @@ namespace Microsoft.AspNet.SignalR
         {
         }
 
+        //Feature - Pass ConnectionMultiplexer instance
+        public RedisScaleoutConfiguration(string eventKey)
+        {
+            EventKey = eventKey;
+        }
+        //Feature - Pass ConnectionMultiplexer instance
+
         public RedisScaleoutConfiguration(string connectionString, string eventKey)
         {
             if (connectionString == null)

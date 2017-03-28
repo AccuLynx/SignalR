@@ -65,6 +65,37 @@ namespace Microsoft.AspNet.SignalR.Redis
             }
         }
 
+        //Feature - Pass ConnectionMultiplexer instance
+
+        /// <summary>
+        /// </summary>
+        /// <param name="resolver"></param>
+        /// <param name="connection"></param>
+        /// <param name="configuration"></param>
+        public RedisMessageBus(IDependencyResolver resolver, IRedisConnection connection, RedisScaleoutConfiguration configuration)
+            : base(resolver, configuration)
+        {
+            if (configuration == null)
+            {
+                throw new ArgumentNullException("configuration");
+            }
+
+            _connection = connection;
+
+            _db = configuration.Database;
+            _key = configuration.EventKey;
+
+            _traceManager = resolver.Resolve<ITraceManager>();
+
+            _trace = _traceManager["SignalR." + nameof(RedisMessageBus)];
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                var ignore = SetupRedisAsync();
+            });
+        }
+        //Feature - Pass ConnectionMultiplexer instance
+
         public TimeSpan ReconnectDelay { get; set; }
 
         // For testing purposes only
@@ -154,6 +185,7 @@ namespace Microsoft.AspNet.SignalR.Redis
 
                 _trace.TraceInformation("OnConnectionFailed - " + errorMessage);
 
+
                 Interlocked.Exchange(ref _state, State.Closed);
             }
             finally
@@ -187,6 +219,7 @@ namespace Microsoft.AspNet.SignalR.Redis
                 if (_state == State.Connected)
                 {
                     _trace.TraceVerbose("Duplicate ConnectionRestored event - ignoring");
+
                     return;
                 }
 
@@ -246,6 +279,65 @@ namespace Microsoft.AspNet.SignalR.Redis
                 await Task.Delay(ReconnectDelay);
             }
         }
+
+        //Feature - Pass ConnectionMultiplexer instance
+
+        /// <summary>
+        ///     Register connection event callbacks and setup Redis
+        /// </summary>
+        /// <returns>Task</returns>
+        internal async Task SetupRedisAsync()
+        {
+            try
+            {
+                if (_connection != null)
+                {
+                    _connection.ConnectionFailed -= OnConnectionFailed;
+                    _connection.ErrorMessage -= OnConnectionError;
+                    _connection.ConnectionRestored -= OnConnectionRestored;
+                }
+
+                _trace.TraceInformation("Setting up Redis...");
+
+                _connection.SetupRedis(_traceManager["SignalR." + nameof(RedisConnection)]);
+
+                _trace.TraceInformation("Setup completed");
+
+                _connection.ConnectionFailed += OnConnectionFailed;
+                _connection.ErrorMessage += OnConnectionError;
+                _connection.ConnectionRestored += OnConnectionRestored;
+
+                await _connection.SubscribeAsync(_key, OnMessage);
+
+                _trace.TraceVerbose("Subscribed to event " + _key);
+
+                var oldState = Interlocked.CompareExchange(ref _state,
+                                            State.Connected,
+                                            State.Closed);
+
+                if (oldState == State.Closed)
+                {
+                    _trace.TraceInformation("Opening stream.");
+                    OpenStream(0);
+                }
+                else
+                {
+                    _trace.TraceError("Unexpected state.");
+                    Shutdown();
+                }
+            }
+            catch (Exception ex)
+            {
+                _trace.TraceError("Error connecting to Redis - " + ex.GetBaseException());
+            }
+
+            if (_state == State.Disposing)
+            {
+                _trace.TraceInformation("MessageBus is disposing.");
+                Shutdown();
+            }
+        }
+        //Feature - Pass ConnectionMultiplexer instance
 
         private async Task ConnectToRedisAsync()
         {

@@ -15,6 +15,45 @@ namespace Microsoft.AspNet.SignalR.Redis
         private TraceSource _trace;
         private ulong _latestMessageId;
 
+        //Feature - Pass ConnectionMultiplexer instance
+        /// <summary>
+        /// </summary>
+        public RedisConnection() { }
+
+        /// <summary>
+        ///     Setup Redis from an existing ConnectionMultiplexer instance
+        /// </summary>
+        /// <param name="connection"></param>
+        public RedisConnection(ConnectionMultiplexer connection)
+        {
+            _connection = connection;
+        }
+
+        //Feature - Pass ConnectionMultiplexer instance
+
+        /// <summary>
+        ///     Register connection event callbacks
+        /// </summary>
+        /// <param name="trace"></param>
+        public void SetupRedis(TraceSource trace)
+        {
+            if (!_connection.IsConnected)
+            {
+                _connection.Dispose();
+                _connection = null;
+                throw new InvalidOperationException("Failed to connect to Redis");
+            }
+
+            _connection.ConnectionFailed += OnConnectionFailed;
+            _connection.ConnectionRestored += OnConnectionRestored;
+            _connection.ErrorMessage += OnError;
+
+            _trace = trace;
+
+            _redisSubscriber = _connection.GetSubscriber();
+        }
+        //Feature - Pass ConnectionMultiplexer instance
+
         public async Task ConnectAsync(string connectionString, TraceSource trace)
         {
             _connection = await ConnectionMultiplexer.ConnectAsync(connectionString, new TraceTextWriter("ConnectionMultiplexer: ", trace));
