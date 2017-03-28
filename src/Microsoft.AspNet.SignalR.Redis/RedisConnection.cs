@@ -14,18 +14,28 @@ namespace Microsoft.AspNet.SignalR.Redis
         private ConnectionMultiplexer _connection;
         private TraceSource _trace;
         private ulong _latestMessageId;
+        private bool _isShareConnecetion;
 
         //Feature - Pass ConnectionMultiplexer instance
+        public bool IsSharedConnection
+        {
+            get
+            {
+                return _isShareConnecetion;
+            }
+        }
         /// <summary>
+        ///     Default constructor
         /// </summary>
         public RedisConnection() { }
 
         /// <summary>
-        ///     Setup Redis from an existing ConnectionMultiplexer instance
+        ///     Constructor that accepts a ConnectionMultiplexer instance
         /// </summary>
         /// <param name="connection"></param>
         public RedisConnection(ConnectionMultiplexer connection)
         {
+            _isShareConnecetion = true;
             _connection = connection;
         }
 
@@ -82,12 +92,17 @@ namespace Microsoft.AspNet.SignalR.Redis
                 _redisSubscriber.Unsubscribe(key);
             }
 
-            if (_connection != null)
+            //Do not take the privilege of closing ConnectionMultiplexer if its shared
+            if (!IsSharedConnection && _connection != null)
             {
                 _connection.Close(allowCommandsToComplete);
             }
 
-            _connection.Dispose();
+            //Do not take the privilege of disposing ConnectionMultiplexer if its shared
+            if (!IsSharedConnection)
+            {
+                _connection.Dispose();
+            }
         }
 
         public async Task SubscribeAsync(string key, Action<int, RedisMessage> onMessage)
