@@ -84,6 +84,8 @@ namespace Microsoft.AspNet.SignalR.Messaging
         {
             lock (_lockObj)
             {
+                _error = null;
+
                 if (_error != null)
                 {
                     throw _error;
