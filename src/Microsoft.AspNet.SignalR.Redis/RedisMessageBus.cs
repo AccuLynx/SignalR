@@ -1,9 +1,10 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNet.SignalR.Messaging;
@@ -65,6 +66,34 @@ namespace Microsoft.AspNet.SignalR.Redis
             }
         }
 
+        /// <summary>Allow passage of an existing ConnectionMultiPlexer into Signalr. 
+        /// </summary>
+        /// <param name="resolver"></param>
+        /// <param name="connection"></param>
+        /// <param name="configuration"></param>
+        public RedisMessageBus(IDependencyResolver resolver, IRedisConnection connection, RedisScaleoutConfiguration configuration)
+            : base(resolver, configuration)
+        {
+            if (configuration == null)
+            {
+                throw new ArgumentNullException("configuration");
+            }
+
+            _connection = connection;
+
+            _db = configuration.Database;
+            _key = configuration.EventKey;
+
+            _traceManager = resolver.Resolve<ITraceManager>();
+
+            _trace = _traceManager["SignalR." + nameof(RedisMessageBus)];
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                var ignore = ConnectWithRetry();
+            });
+        }
+
         public TimeSpan ReconnectDelay { get; set; }
 
         public virtual void OpenStream(int streamIndex)
@@ -122,7 +151,7 @@ namespace Microsoft.AspNet.SignalR.Redis
         {
             await _connection.RestoreLatestValueForKey(_db, _key);
 
-            _trace.TraceInformation("Connection restored");
+                _trace.TraceInformation("Connection restored");
 
             OpenStream(0);
         }

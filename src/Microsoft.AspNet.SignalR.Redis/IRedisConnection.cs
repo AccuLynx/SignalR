@@ -11,6 +11,10 @@ namespace Microsoft.AspNet.SignalR.Redis
     {
         Task ConnectAsync(string connectionString, TraceSource trace);
 
+        //Feature - Pass ConnectionMultiplexer instance
+        void SetupRedis(TraceSource trace);
+        //Feature - Pass ConnectionMultiplexer instance
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1026:DefaultParametersShouldNotBeUsed")]
         void Close(string key, bool allowCommandsToComplete = true);
 

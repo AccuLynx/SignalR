@@ -14,6 +14,55 @@ namespace Microsoft.AspNet.SignalR.Redis
         private ConnectionMultiplexer _connection;
         private TraceSource _trace;
         private ulong _latestMessageId;
+        private bool _isShareConnecetion;
+
+        //Feature - Pass ConnectionMultiplexer instance
+        public bool IsSharedConnection
+        {
+            get
+            {
+                return _isShareConnecetion;
+            }
+        }
+        /// <summary>
+        ///     Default constructor
+        /// </summary>
+        public RedisConnection() { }
+
+        /// <summary>
+        ///     Constructor that accepts a ConnectionMultiplexer instance
+        /// </summary>
+        /// <param name="connection"></param>
+        public RedisConnection(ConnectionMultiplexer connection)
+        {
+            _isShareConnecetion = true;
+            _connection = connection;
+        }
+
+        //Feature - Pass ConnectionMultiplexer instance
+
+        /// <summary>
+        ///     Register connection event callbacks
+        /// </summary>
+        /// <param name="trace"></param>
+        public void SetupRedis(TraceSource trace)
+        {
+            if (!_connection.IsConnected)
+            {
+                _connection.Dispose();
+                _connection = null;
+                throw new InvalidOperationException("Failed to connect to Redis");
+            }
+
+            _connection.ConnectionFailed += OnConnectionFailed;
+            _connection.ConnectionRestored += OnConnectionRestored;
+            _connection.ErrorMessage += OnError;
+
+            _trace = trace;
+
+            _redisSubscriber = _connection.GetSubscriber();
+        }
+        //Feature - Pass ConnectionMultiplexer instance
 
         private object _shutdownLock = new object();
         private bool _disposed = false;
@@ -75,13 +124,18 @@ namespace Microsoft.AspNet.SignalR.Redis
                     _redisSubscriber.Unsubscribe(key);
                 }
 
-                if (_connection != null)
+                //Do not take the privilege of closing ConnectionMultiplexer if its shared
+                if (!IsSharedConnection && _connection != null)
                 {
                     _connection.Close(allowCommandsToComplete);
                 }
 
-                _connection.Dispose();
-                _disposed = true;
+                //Do not take the privilege of disposing ConnectionMultiplexer if its shared
+                if (!IsSharedConnection)
+                {
+                    _connection.Dispose();
+                    _disposed = true;
+                }
             }
         }
 
